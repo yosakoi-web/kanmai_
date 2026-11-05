@@ -100,6 +100,7 @@ const groupFrame = document.querySelector('[data-group-photo]');
 const groupPhoto = new Image();
 groupPhoto.onload = () => {
   groupPhoto.alt = '総踊連合 神舞の集合写真';
+  groupPhoto.tabIndex = 0;
   groupFrame.appendChild(groupPhoto);
   groupFrame.classList.add('has-photo');
 };
@@ -110,8 +111,9 @@ const photoGallery = document.getElementById('photo-gallery');
 let photoCount = 0;
 for (let i = 1; i <= 6; i++) {
   const img = new Image();
-  img.loading = 'lazy';
+  // 表示前の画像に lazy を設定すると読み込み待ちになるため、ここでは通常読み込み
   img.alt = PHOTO_CAPTIONS[i-1];
+  img.tabIndex = 0;
   img.onload = () => {
     if (photoCount === 0) photoGallery.innerHTML = '';
     photoCount++;
@@ -150,3 +152,83 @@ if (/^[A-Za-z0-9_-]{11}$/.test(YOUTUBE_VIDEO_ID.trim())) {
 }
 
 document.getElementById('copyright-year').textContent = new Date().getFullYear();
+
+
+/* 写真をクリックすると拡大表示（集合写真・写真ページ・募集画像） */
+const lightbox = document.createElement('div');
+lightbox.className = 'photo-lightbox';
+lightbox.setAttribute('role', 'dialog');
+lightbox.setAttribute('aria-modal', 'true');
+lightbox.setAttribute('aria-label', '写真の拡大表示');
+lightbox.hidden = true;
+
+const lightboxClose = document.createElement('button');
+lightboxClose.type = 'button';
+lightboxClose.className = 'photo-lightbox-close';
+lightboxClose.setAttribute('aria-label', '拡大表示を閉じる');
+lightboxClose.textContent = '×';
+
+const lightboxBody = document.createElement('figure');
+lightboxBody.className = 'photo-lightbox-body';
+const lightboxImage = document.createElement('img');
+lightboxImage.alt = '';
+const lightboxCaption = document.createElement('figcaption');
+lightboxBody.append(lightboxImage, lightboxCaption);
+lightbox.append(lightboxClose, lightboxBody);
+document.body.appendChild(lightbox);
+
+let lightboxPreviousFocus = null;
+function openLightbox(image) {
+  lightboxPreviousFocus = document.activeElement;
+  lightboxImage.src = image.currentSrc || image.src;
+  lightboxImage.alt = image.alt || '写真';
+  lightboxCaption.textContent = image.closest('.gallery-photo')?.querySelector('figcaption')?.textContent || image.alt || '';
+  lightbox.hidden = false;
+  document.body.classList.add('lightbox-open');
+  lightboxClose.focus();
+}
+function closeLightbox() {
+  if (lightbox.hidden) return;
+  lightbox.hidden = true;
+  document.body.classList.remove('lightbox-open');
+  lightboxImage.removeAttribute('src');
+  if (lightboxPreviousFocus instanceof HTMLElement) lightboxPreviousFocus.focus();
+}
+
+// ギャラリーの写真はあとから追加されるため、イベントを親要素で受け取る
+photoGallery.addEventListener('click', event => {
+  const image = event.target.closest('.gallery-photo img');
+  if (image) openLightbox(image);
+});
+// キーボードでも画像を開けるよう、追加後の写真にフォーカスを設定
+photoGallery.addEventListener('keydown', event => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const image = event.target.closest('.gallery-photo img');
+  if (image) {
+    event.preventDefault();
+    openLightbox(image);
+  }
+});
+const zoomableStaticImages = [groupFrame, document.querySelector('.recruitment-image')];
+zoomableStaticImages.forEach(element => {
+  if (!element) return;
+  if (element.matches('img')) element.tabIndex = 0;
+  element.addEventListener('click', event => {
+    const image = event.target.closest('img');
+    if (image) openLightbox(image);
+  });
+  element.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const image = event.target.closest('img');
+    if (!image) return;
+    event.preventDefault();
+    openLightbox(image);
+  });
+});
+lightboxClose.addEventListener('click', closeLightbox);
+lightbox.addEventListener('click', event => {
+  if (event.target === lightbox) closeLightbox();
+});
+window.addEventListener('keydown', event => {
+  if (!lightbox.hidden && event.key === 'Escape') closeLightbox();
+});
